@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>金門迎城隍 - 神轎即時定位</title>
+    <title>金門迎城隍 - 定位系統</title>
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -12,39 +12,50 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
 
     <style>
-        body, html { margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden; font-family: "Microsoft JhengHei", sans-serif; }
-        #map { height: 100vh; width: 100%; background: #e0e0e0; z-index: 1; }
+        body, html { margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden; }
+        #map { height: 100vh; width: 100%; background: #ccc; } /* 背景灰色方便確認容器存在 */
         .control-panel {
             position: absolute; top: 10px; left: 10px; z-index: 1000;
-            background: rgba(255,255,255,0.95); padding: 15px; border-radius: 8px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2); width: 180px;
+            background: white; padding: 15px; border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3); width: 180px;
         }
-        button {
-            width: 100%; padding: 12px; margin-top: 8px; cursor: pointer;
-            border: none; border-radius: 6px; font-weight: bold; font-size: 14px;
-        }
-        .btn-user { background: #2196F3; color: white; }
-        .btn-admin { background: #FF9800; color: white; }
-        .status { font-size: 13px; margin-top: 10px; color: #d32f2f; font-weight: bold; }
-        .palanquin-icon { font-size: 30px; text-align: center; line-height: 40px; }
-        hr { border: 0; border-top: 1px solid #eee; margin: 10px 0; }
+        button { width: 100%; padding: 10px; margin-top: 5px; cursor: pointer; font-weight: bold; }
+        .status { font-size: 13px; margin-top: 10px; color: red; font-weight: bold; }
     </style>
 </head>
 <body>
 
 <div class="control-panel">
-    <b style="color:#d32f2f; font-size: 16px;">🏮 浯島城隍巡安</b>
-    <button class="btn-user" onclick="locateUser()">📍 我的位置</button>
+    <b style="color:#d32f2f">🏮 浯島城隍巡安</b>
+    <button onclick="locateUser()" style="background:#2196F3; color:white; border:none;">📍 我的位置</button>
     <hr>
-    <p style="font-size: 12px; color: #888; margin: 0;">管理人員專用：</p>
-    <button id="adminBtn" class="btn-admin" onclick="toggleAdminMode()">📡 開啟神轎定位</button>
-    <div id="statusText" class="status">系統載入中...</div>
+    <button id="adminBtn" onclick="toggleAdminMode()" style="background:#FF9800; color:white; border:none;">📡 開啟神轎定位</button>
+    <div id="statusText" class="status">正在啟動地圖...</div>
 </div>
 
 <div id="map"></div>
 
 <script>
-    // --- 1. 配置與變數 ---
+    // --- 直接執行區 ---
+    const statusText = document.getElementById('statusText');
+
+    // 1. 立即嘗試初始化地圖
+    var map;
+    var palanquinMarker;
+    try {
+        map = L.map('map', { zoomControl: false }).setView([24.4357, 118.3168], 16);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+        
+        var icon = L.divIcon({ html: '🏮', className: '', iconSize: [40, 40] });
+        palanquinMarker = L.marker([24.4357, 118.3168], { icon: icon }).addTo(map);
+        
+        statusText.innerText = "地圖已就緒，連線中...";
+        console.log("Map OK");
+    } catch (e) {
+        alert("地圖初始化失敗: " + e.message);
+    }
+
+    // 2. Firebase 初始化
     const firebaseConfig = {
         apiKey: "AIzaSyAWtgeRkdjtaHdtnoKdgOMQ_PTBMpwmsLI",
         authDomain: "kinmen-location.firebaseapp.com",
@@ -52,113 +63,69 @@
         projectId: "kinmen-location",
         storageBucket: "kinmen-location.firebasestorage.app",
         messagingSenderId: "853976014096",
-        appId: "1:853976014096:web:f119c60182766512651995",
-        measurementId: "G-J8NL3GC45R"
+        appId: "1:853976014096:web:f119c60182766512651995"
     };
 
-    let map, palanquinMarker, userMarker, userCircle;
-    let isAdmin = false, watchId = null;
-    let db = null;
-
-    // --- 2. 初始化函數 ---
-    function init() {
-        const statusText = document.getElementById('statusText');
-        
-        // A. 初始化地圖
-        try {
-            map = L.map('map', { zoomControl: false }).setView([24.4357, 118.3168], 16);
-            L.control.zoom({ position: 'bottomright' }).addTo(map);
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+    var db;
+    try {
+        if (typeof firebase !== 'undefined') {
+            firebase.initializeApp(firebaseConfig);
+            db = firebase.database();
             
-            const palanquinIcon = L.divIcon({ html: '🏮', className: 'palanquin-icon', iconSize: [40, 40] });
-            palanquinMarker = L.marker([24.4357, 118.3168], { icon: palanquinIcon }).addTo(map);
-        } catch (e) {
-            statusText.innerText = "❌ 地圖故障";
-            console.error("Map Error:", e);
-        }
-
-        // B. 初始化 Firebase
-        try {
-            if (typeof firebase !== 'undefined') {
-                if (!firebase.apps.length) {
-                    firebase.initializeApp(firebaseConfig);
-                }
-                db = firebase.database();
-                
-                // 核心修正：確保 db 存在才執行監聽
-                if (db) {
-                    db.ref(".info/connected").on("value", (snap) => {
-                        if (snap.val() === true) {
-                            statusText.innerText = "✅ 系統已連線";
-                            statusText.style.color = "green";
-                            startListening();
-                        } else {
-                            statusText.innerText = "⚠️ 正在嘗試連線...";
-                            statusText.style.color = "#FF9800";
+            // 監聽連線
+            db.ref(".info/connected").on("value", function(snap) {
+                if (snap.val() === true) {
+                    statusText.innerText = "✅ 系統連線成功";
+                    statusText.style.color = "green";
+                    // 監聽神轎
+                    db.ref('palanquin/location').on('value', function(snapshot) {
+                        var data = snapshot.val();
+                        if (data) {
+                            palanquinMarker.setLatLng([data.lat, data.lng]);
+                            statusText.innerText = "最後更新: " + new Date(data.timestamp).toLocaleTimeString();
                         }
                     });
+                } else {
+                    statusText.innerText = "⚠️ 嘗試連線資料庫中...";
+                    statusText.style.color = "orange";
                 }
-            } else {
-                statusText.innerText = "❌ SDK 未載入";
-            }
-        } catch (e) {
-            statusText.innerText = "❌ 連線錯誤";
-            console.error("Firebase Init Error:", e);
+            });
+        } else {
+            statusText.innerText = "❌ 找不到 Firebase SDK";
         }
+    } catch (e) {
+        statusText.innerText = "❌ Firebase 錯誤";
+        console.error(e);
     }
 
-    // --- 3. 功能邏輯 ---
-    function startListening() {
-        if (!db) return;
-        db.ref('palanquin/location').on('value', (snapshot) => {
-            const data = snapshot.val();
-            if (data && data.lat) {
-                palanquinMarker.setLatLng([data.lat, data.lng]);
-                document.getElementById('statusText').innerText = "最後更新: " + new Date(data.timestamp).toLocaleTimeString();
-                document.getElementById('statusText').style.color = "green";
-            }
-        });
-    }
-
+    // 3. 功能函式
     function locateUser() {
-        if (map) map.locate({setView: true, maxZoom: 17});
+        map.locate({setView: true, maxZoom: 17});
     }
 
-    // 地圖定位事件處理
-    if (map) {
-        map.on('locationfound', (e) => {
-            if (userMarker) {
-                userMarker.setLatLng(e.latlng);
-                userCircle.setLatLng(e.latlng).setRadius(e.accuracy);
-            } else {
-                userMarker = L.marker(e.latlng).addTo(map).bindPopup("你在這裡");
-                userCircle = L.circle(e.latlng, e.accuracy).addTo(map);
-            }
-        });
-    }
+    map.on('locationfound', function(e) {
+        L.marker(e.latlng).addTo(map).bindPopup("你在這裡").openPopup();
+    });
 
+    var isAdmin = false;
+    var watchId;
     function toggleAdminMode() {
-        if (!db) return alert("系統尚未連線");
         if (!isAdmin) {
-            if (confirm("開啟神轎發送模式？")) {
-                isAdmin = true;
-                document.getElementById('adminBtn').innerText = "🛑 停止發送";
-                document.getElementById('adminBtn').style.background = "#f44336";
-                watchId = navigator.geolocation.watchPosition((pos) => {
-                    const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude, timestamp: Date.now() };
-                    db.ref('palanquin/location').set(loc);
-                }, (err) => alert("定位失敗: " + err.message), { enableHighAccuracy: true });
-            }
+            isAdmin = true;
+            document.getElementById('adminBtn').innerText = "🛑 停止發送";
+            watchId = navigator.geolocation.watchPosition(function(pos) {
+                db.ref('palanquin/location').set({
+                    lat: pos.coords.latitude,
+                    lng: pos.coords.longitude,
+                    timestamp: Date.now()
+                });
+            }, function(err) { alert(err.message); }, { enableHighAccuracy: true });
         } else {
             isAdmin = false;
             document.getElementById('adminBtn').innerText = "📡 開啟神轎定位";
-            document.getElementById('adminBtn').style.background = "#FF9800";
-            if (watchId) navigator.geolocation.clearWatch(watchId);
+            navigator.geolocation.clearWatch(watchId);
         }
     }
-
-    // 確保 DOM 載入後才執行初始化
-    document.addEventListener('DOMContentLoaded', init);
 </script>
 
 </body>
