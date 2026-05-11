@@ -5,45 +5,57 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>金門迎城隍 - 神轎即時定位</title>
     
-    <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <!-- Firebase SDK (v8) -->
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
 
     <style>
-        body, html { margin: 0; padding: 0; height: 100%; font-family: sans-serif; }
-        #map { height: 100vh; width: 100%; }
+        /* 修正地圖無法顯示的核心：確保容器有高度 */
+        body, html { 
+            margin: 0; 
+            padding: 0; 
+            height: 100%; 
+            width: 100%;
+            overflow: hidden; 
+        }
+        #map { 
+            height: 100vh; 
+            width: 100%; 
+            background: #e5e3df; /* 地圖未載入前的底色 */
+        }
         .control-panel {
             position: absolute; top: 10px; left: 10px; z-index: 1000;
-            background: rgba(255,255,255,0.9); padding: 15px; border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.3); max-width: 200px;
+            background: rgba(255,255,255,0.95); padding: 15px; border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2); width: 180px;
         }
         button {
-            width: 100%; padding: 10px; margin-top: 5px; cursor: pointer;
-            border: none; border-radius: 4px; font-weight: bold;
+            width: 100%; padding: 12px; margin-top: 8px; cursor: pointer;
+            border: none; border-radius: 6px; font-weight: bold; font-size: 14px;
+            transition: 0.3s;
         }
         .btn-user { background: #2196F3; color: white; }
+        .btn-user:active { background: #1976D2; }
         .btn-admin { background: #FF9800; color: white; }
-        .status { font-size: 12px; margin-top: 8px; color: #666; }
-        .palanquin-icon { font-size: 30px; text-align: center; }
+        .status { font-size: 12px; margin-top: 10px; color: #666; font-weight: bold; }
+        .palanquin-icon { font-size: 30px; text-align: center; line-height: 40px; }
+        hr { border: 0; border-top: 1px solid #eee; margin: 10px 0; }
     </style>
 </head>
 <body>
 
 <div class="control-panel">
-    <b style="color:#d32f2f">🏮 浯島城隍巡安</b>
+    <b style="color:#d32f2f; font-size: 16px;">🏮 浯島城隍巡安</b>
     <button class="btn-user" onclick="locateUser()">📍 我的位置</button>
     <hr>
-    <p style="font-size: 13px; margin: 5px 0;">神轎管理人員專用：</p>
+    <p style="font-size: 12px; color: #888; margin: 0;">神轎管理人員專用：</p>
     <button id="adminBtn" class="btn-admin" onclick="toggleAdminMode()">📡 開啟神轎定位</button>
-    <div id="statusText" class="status">目前狀態：接收模式</div>
+    <div id="statusText" class="status">正在檢查連線...</div>
 </div>
 
 <div id="map"></div>
 
 <script>
-    // 1. Firebase 配置 (For Firebase JS SDK v7.20.0 and later, measurementId is optional)
+    // 1. Firebase 配置
     const firebaseConfig = {
         apiKey: "AIzaSyAWtgeRkdjtaHdtnoKdgOMQ_PTBMpwmsLI",
         authDomain: "kinmen-location.firebaseapp.com",
@@ -54,40 +66,58 @@
         appId: "1:853976014096:web:f119c60182766512651995",
         measurementId: "G-J8NL3GC45R"
     };
-    firebase.initializeApp(firebaseConfig);
+    
+    // 初始化 Firebase
+    if (!firebase.apps.length) {
+        firebase.initializeApp(firebaseConfig);
+    }
     const db = firebase.database();
 
-    // 【新增】檢查 Firebase 資料庫連線狀態
+    // 檢查 Firebase 連線狀態
     db.ref(".info/connected").on("value", (snap) => {
         const status = document.getElementById('statusText');
         if (snap.val() === true) {
-            console.log("Firebase 連線成功！");
+            status.innerText = "✅ 資料庫已連線";
+            status.style.color = "green";
         } else {
-            status.innerText = "⚠️ 資料庫連線中/失敗...";
-            console.error("Firebase 連線失敗，請檢查網路或 Firebase Rules。");
+            status.innerText = "⚠️ 資料庫斷線/連線中...";
+            status.style.color = "red";
         }
     });
 
-    // 2. 初始化地圖
-    const map = L.map('map').setView([24.4357, 118.3168], 16);
+    // 2. 初始化地圖 (金門城隍廟附近)
+    const map = L.map('map', {
+        zoomControl: false // 移到右下角避免擋到面板
+    }).setView([24.4357, 118.3168], 16);
+    
+    L.control.zoom({ position: 'bottomright' }).addTo(map);
+
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© OpenStreetMap'
     }).addTo(map);
 
     // 3. 圖示定義
-    const palanquinIcon = L.divIcon({ html: '🏮', className: 'palanquin-icon', iconSize: [40, 40] });
-    let palanquinMarker = L.marker([0, 0], { icon: palanquinIcon }).addTo(map).bindPopup("神轎在此");
+    const palanquinIcon = L.divIcon({ 
+        html: '🏮', 
+        className: 'palanquin-icon', 
+        iconSize: [40, 40],
+        iconAnchor: [20, 20]
+    });
+    
+    let palanquinMarker = L.marker([24.4357, 118.3168], { icon: palanquinIcon }).addTo(map).bindPopup("神轎目前位置");
     let userMarker, userCircle;
 
-    // 4. 監聽神轎位置
+    // 4. 監聽神轎位置 (接收端)
     db.ref('palanquin/location').on('value', (snapshot) => {
         const data = snapshot.val();
         if (data && data.lat) {
             palanquinMarker.setLatLng([data.lat, data.lng]);
-            document.getElementById('statusText').innerText = "最後更新: " + new Date(data.timestamp).toLocaleTimeString();
+            const timeStr = new Date(data.timestamp).toLocaleTimeString();
+            document.getElementById('statusText').innerText = "最後更新: " + timeStr;
         }
     }, (error) => {
-        alert("讀取資料失敗，請檢查 Firebase Rules 權限。");
+        console.error(error);
+        document.getElementById('statusText').innerText = "❌ 讀取失敗：權限不足";
     });
 
     // 5. 神轎定位上傳 (管理端)
@@ -96,9 +126,9 @@
 
     function toggleAdminMode() {
         if (!isAdmin) {
-            if (confirm("您確定要開啟「神轎發送模式」嗎？")) {
+            if (confirm("【管理員注意】確定要開始發送您的位置作為「神轎位置」嗎？")) {
                 isAdmin = true;
-                document.getElementById('adminBtn').innerText = "🛑 停止發送";
+                document.getElementById('adminBtn').innerText = "🛑 停止發送定位";
                 document.getElementById('adminBtn').style.background = "#f44336";
                 startTrackingPalanquin();
             }
@@ -111,7 +141,7 @@
     }
 
     function startTrackingPalanquin() {
-        if (!navigator.geolocation) return alert("瀏覽器不支援定位");
+        if (!navigator.geolocation) return alert("您的裝置不支援 GPS 定位");
         
         watchId = navigator.geolocation.watchPosition(
             (pos) => {
@@ -120,19 +150,23 @@
                     lng: pos.coords.longitude,
                     timestamp: Date.now()
                 };
+                // 更新到 Firebase
                 db.ref('palanquin/location').set(loc);
-                map.setView([loc.lat, loc.lng]);
+                // 管理員端地圖跟隨
+                map.panTo([loc.lat, loc.lng]);
             },
-            (err) => alert("發送定位失敗: " + err.message + "\n請確保開啟 GPS 並使用 HTTPS 網址。"),
-            { enableHighAccuracy: true }
+            (err) => {
+                alert("發送定位失敗: " + err.message + "\n請確認開啟 GPS 並使用 HTTPS 連線。");
+                toggleAdminMode(); // 發生錯誤自動關閉
+            },
+            { enableHighAccuracy: true, timeout: 10000 }
         );
     }
 
     // 6. 個人定位功能
     function locateUser() {
-        // 檢查 HTTPS
         if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
-            alert("錯誤：定位功能僅能在 HTTPS 安全網址下運作。");
+            alert("安全性限制：定位功能需要 HTTPS 網址才能運作。");
             return;
         }
         map.locate({setView: true, maxZoom: 17, enableHighAccuracy: true});
@@ -149,8 +183,11 @@
     });
 
     map.on('locationerror', (e) => {
-        alert("無法取得您的位置：" + e.message);
+        alert("定位失敗：" + e.message);
     });
+
+    // 解決部分瀏覽器初次載入地圖破圖問題
+    setTimeout(() => { map.invalidateSize(); }, 500);
 </script>
 
 </body>
