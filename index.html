@@ -13,7 +13,7 @@
 
     <style>
         body, html { margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden; font-family: "Microsoft JhengHei", sans-serif; }
-        #map { height: 100vh; width: 100%; background: #e0e0e0; }
+        #map { height: 100vh; width: 100%; background: #e0e0e0; z-index: 1; }
         .control-panel {
             position: absolute; top: 10px; left: 10px; z-index: 1000;
             background: rgba(255,255,255,0.95); padding: 15px; border-radius: 8px;
@@ -38,7 +38,7 @@
     <hr>
     <p style="font-size: 12px; color: #888; margin: 0;">管理人員專用：</p>
     <button id="adminBtn" class="btn-admin" onclick="toggleAdminMode()">📡 開啟神轎定位</button>
-    <div id="statusText" class="status">系統初始化中...</div>
+    <div id="statusText" class="status">系統載入中...</div>
 </div>
 
 <div id="map"></div>
@@ -58,79 +58,87 @@
 
     let map, palanquinMarker, userMarker, userCircle;
     let isAdmin = false, watchId = null;
-    let db;
+    let db = null;
 
-    // --- 2. 核心初始化函數 ---
+    // --- 2. 初始化函數 ---
     function init() {
-        const status = document.getElementById('statusText');
+        const statusText = document.getElementById('statusText');
         
-        // A. 先初始化地圖 (不管 Firebase 有沒有通，地圖一定要先出來)
+        // A. 初始化地圖
         try {
-            if (typeof L === 'undefined') throw new Error("Leaflet 未載入");
-            
             map = L.map('map', { zoomControl: false }).setView([24.4357, 118.3168], 16);
             L.control.zoom({ position: 'bottomright' }).addTo(map);
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
             
             const palanquinIcon = L.divIcon({ html: '🏮', className: 'palanquin-icon', iconSize: [40, 40] });
             palanquinMarker = L.marker([24.4357, 118.3168], { icon: palanquinIcon }).addTo(map);
-            
-            console.log("地圖載入成功");
         } catch (e) {
-            status.innerText = "❌ 地圖載入失敗: " + e.message;
-            return;
+            statusText.innerText = "❌ 地圖故障";
+            console.error("Map Error:", e);
         }
 
         // B. 初始化 Firebase
         try {
-            if (typeof firebase === 'undefined') throw new Error("Firebase SDK 未載入");
-            
-            if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
-            db = firebase.database();
-            
-            // 監聽連線
-            db.ref(".info/connected").on("value", (snap) => {
-                if (snap.val() === true) {
-                    status.innerText = "✅ 系統已連線";
-                    status.style.color = "green";
-                    startListening();
-                } else {
-                    status.innerText = "⚠️ 正在連線資料庫...";
-                    status.style.color = "#FF9800";
+            if (typeof firebase !== 'undefined') {
+                if (!firebase.apps.length) {
+                    firebase.initializeApp(firebaseConfig);
                 }
-            });
+                db = firebase.database();
+                
+                // 核心修正：確保 db 存在才執行監聽
+                if (db) {
+                    db.ref(".info/connected").on("value", (snap) => {
+                        if (snap.val() === true) {
+                            statusText.innerText = "✅ 系統已連線";
+                            statusText.style.color = "green";
+                            startListening();
+                        } else {
+                            statusText.innerText = "⚠️ 正在嘗試連線...";
+                            statusText.style.color = "#FF9800";
+                        }
+                    });
+                }
+            } else {
+                statusText.innerText = "❌ SDK 未載入";
+            }
         } catch (e) {
-            status.innerText = "❌ Firebase 錯誤: " + e.message;
-            console.error(e);
+            statusText.innerText = "❌ 連線錯誤";
+            console.error("Firebase Init Error:", e);
         }
     }
 
     // --- 3. 功能邏輯 ---
     function startListening() {
+        if (!db) return;
         db.ref('palanquin/location').on('value', (snapshot) => {
             const data = snapshot.val();
             if (data && data.lat) {
                 palanquinMarker.setLatLng([data.lat, data.lng]);
                 document.getElementById('statusText').innerText = "最後更新: " + new Date(data.timestamp).toLocaleTimeString();
+                document.getElementById('statusText').style.color = "green";
             }
         });
     }
 
     function locateUser() {
-        map.locate({setView: true, maxZoom: 17});
+        if (map) map.locate({setView: true, maxZoom: 17});
     }
 
-    map.on('locationfound', (e) => {
-        if (userMarker) {
-            userMarker.setLatLng(e.latlng);
-            userCircle.setLatLng(e.latlng).setRadius(e.accuracy);
-        } else {
-            userMarker = L.marker(e.latlng).addTo(map).bindPopup("你在這裡");
-            userCircle = L.circle(e.latlng, e.accuracy).addTo(map);
-        }
-    });
+    // 地圖定位事件處理
+    if (map) {
+        map.on('locationfound', (e) => {
+            if (userMarker) {
+                userMarker.setLatLng(e.latlng);
+                userCircle.setLatLng(e.latlng).setRadius(e.accuracy);
+            } else {
+                userMarker = L.marker(e.latlng).addTo(map).bindPopup("你在這裡");
+                userCircle = L.circle(e.latlng, e.accuracy).addTo(map);
+            }
+        });
+    }
 
     function toggleAdminMode() {
+        if (!db) return alert("系統尚未連線");
         if (!isAdmin) {
             if (confirm("開啟神轎發送模式？")) {
                 isAdmin = true;
@@ -139,18 +147,18 @@
                 watchId = navigator.geolocation.watchPosition((pos) => {
                     const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude, timestamp: Date.now() };
                     db.ref('palanquin/location').set(loc);
-                }, (err) => alert(err.message), { enableHighAccuracy: true });
+                }, (err) => alert("定位失敗: " + err.message), { enableHighAccuracy: true });
             }
         } else {
             isAdmin = false;
             document.getElementById('adminBtn').innerText = "📡 開啟神轎定位";
             document.getElementById('adminBtn').style.background = "#FF9800";
-            navigator.geolocation.clearWatch(watchId);
+            if (watchId) navigator.geolocation.clearWatch(watchId);
         }
     }
 
-    // 啟動初始化
-    init();
+    // 確保 DOM 載入後才執行初始化
+    document.addEventListener('DOMContentLoaded', init);
 </script>
 
 </body>
