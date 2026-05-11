@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>金門迎城隍 - 定位系統</title>
+    <title>2026 金門迎城隍 - 精準繞境地圖</title>
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -12,117 +12,126 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
 
     <style>
-        body, html { margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden; }
-        #map { height: 100vh; width: 100%; background: #ccc; } /* 背景灰色方便確認容器存在 */
+        body, html { margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden; font-family: "Microsoft JhengHei", sans-serif; }
+        #map { height: 100vh; width: 100%; background: #f8f8f8; }
         .control-panel {
             position: absolute; top: 10px; left: 10px; z-index: 1000;
-            background: white; padding: 15px; border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.3); width: 180px;
+            background: rgba(255,255,255,0.9); padding: 15px; border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2); width: 200px;
         }
-        button { width: 100%; padding: 10px; margin-top: 5px; cursor: pointer; font-weight: bold; }
-        .status { font-size: 13px; margin-top: 10px; color: red; font-weight: bold; }
+        button {
+            width: 100%; padding: 12px; margin-top: 8px; cursor: pointer;
+            border: none; border-radius: 8px; font-weight: bold; transition: 0.3s;
+        }
+        .btn-user { background: #2196F3; color: white; }
+        .btn-admin { background: #FF9800; color: white; }
+        .status { font-size: 13px; margin-top: 10px; font-weight: bold; color: #d32f2f; }
+        .palanquin-icon { font-size: 32px; text-align: center; }
     </style>
 </head>
 <body>
 
 <div class="control-panel">
-    <b style="color:#d32f2f">🏮 浯島城隍巡安</b>
-    <button onclick="locateUser()" style="background:#2196F3; color:white; border:none;">📍 我的位置</button>
-    <hr>
-    <button id="adminBtn" onclick="toggleAdminMode()" style="background:#FF9800; color:white; border:none;">📡 開啟神轎定位</button>
-    <div id="statusText" class="status">正在啟動地圖...</div>
+    <b style="color:#d32f2f; font-size: 18px;">🏮 2026 迎城隍定位</b>
+    <button class="btn-user" onclick="locateUser()">📍 我的位置</button>
+    <hr style="border:0; border-top:1px solid #ddd; margin:10px 0;">
+    <button id="adminBtn" class="btn-admin" onclick="toggleAdminMode()">📡 開啟神轎定位</button>
+    <div id="statusText" class="status">正在同步繞境路線...</div>
 </div>
 
 <div id="map"></div>
 
 <script>
-    // --- 直接執行區 ---
-    const statusText = document.getElementById('statusText');
-
-    // 1. 立即嘗試初始化地圖
-    var map;
-    var palanquinMarker;
-    try {
-        map = L.map('map', { zoomControl: false }).setView([24.4357, 118.3168], 16);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-        
-        var icon = L.divIcon({ html: '🏮', className: '', iconSize: [40, 40] });
-        palanquinMarker = L.marker([24.4357, 118.3168], { icon: icon }).addTo(map);
-        
-        statusText.innerText = "地圖已就緒，連線中...";
-        console.log("Map OK");
-    } catch (e) {
-        alert("地圖初始化失敗: " + e.message);
-    }
-
-    // 2. Firebase 初始化
-    const firebaseConfig = {
-        apiKey: "AIzaSyAWtgeRkdjtaHdtnoKdgOMQ_PTBMpwmsLI",
-        authDomain: "kinmen-location.firebaseapp.com",
-        databaseURL: "https://kinmen-location-default-rtdb.firebaseio.com",
-        projectId: "kinmen-location",
-        storageBucket: "kinmen-location.firebasestorage.app",
-        messagingSenderId: "853976014096",
-        appId: "1:853976014096:web:f119c60182766512651995"
+    // 1. 繞境座標資料 (由您提供的 GeoJSON 轉換)
+    const geojsonData = {
+        "type": "FeatureCollection",
+        "features": [{
+            "type": "Feature",
+            "geometry": {
+                "type": "LineString",
+                "coordinates": [
+                    [118.31609767556955, 24.432574007989885], [118.31550686056818, 24.432765965880265], [118.31513245667935, 24.43262709080453], [118.31502152219383, 24.432759653379634], [118.31465405171014, 24.432652340829577], [118.31443911614434, 24.433037403086345], [118.3147095189529, 24.433315152180626], [118.31502152219383, 24.433062653029282], [118.31520179073232, 24.433151027789364], [118.31588819786214, 24.433908523196635], [118.31629033537314, 24.433567650826404], [118.31691434185353, 24.432765965880265], [118.31697127011716, 24.43274628080927], [118.31788258981794, 24.433342829163067], [118.31620181725589, 24.434673094371547], [118.31727820143988, 24.435946555539886], [118.31836866495541, 24.43709816666336], [118.3197137023289, 24.434344374715195], [118.31897100855309, 24.43396233522961], [118.31971639144871, 24.433334792549104], [118.31956275256397, 24.433152448422817], [118.319414596218, 24.43308000848127], [118.31911279625132, 24.432752779261875], [118.31888233082213, 24.432453026559486], [118.31945300712283, 24.43214577930081], [118.31898906406451, 24.431461470850223], [118.31939469659403, 24.431318660628037], [118.31952697591862, 24.43134182115122], [118.31993398922492, 24.431207490058583], [118.32001539188622, 24.431383510082313], [118.32053433385045, 24.43128623588956], [118.32058012284739, 24.430836920782255], [118.32017819720869, 24.430660899994578], [118.3201120575464, 24.430864713515746], [118.31974065790445, 24.430832288659417], [118.3196643429095, 24.430693324894975], [118.31953206358492, 24.430596050168774], [118.31941504725938, 24.430609946562825], [118.31934890759709, 24.430549728844227], [118.31876891363692, 24.431175065290375], [118.31850435498774, 24.431378877979526], [118.3184534783245, 24.43160585081519], [118.31813804301339, 24.43184671950017], [118.31763740413362, 24.432131171859368], [118.3170167088428, 24.43271944403986], [118.31671144886309, 24.432608274703995], [118.31626882189374, 24.432223813329855], [118.31641636387633, 24.431950520588117], [118.31664941675268, 24.43178687577958], [118.31679142079281, 24.43162005219267], [118.317107494303, 24.43146156957974], [118.31740982548769, 24.43127389254363], [118.31725407911978, 24.431002802998535], [118.31759305650871, 24.430881855168423], [118.31748769867278, 24.43048564594369], [118.31729530610068, 24.43018536022845], [118.31617759687236, 24.430227066620517], [118.31579741097602, 24.430244535338687], [118.31534849497677, 24.430286241711215], [118.31494080594052, 24.43040301948089], [118.31462931320476, 24.43050728525533], [118.31466137863231, 24.43074084027623], [118.31467054018339, 24.430957712409395], [118.31464305553021, 24.43105363650318], [118.31461557087931, 24.431228802051393], [118.31451937459212, 24.43123714326191], [118.31451937459212, 24.431470696932365], [118.31457434389841, 24.431574961823117], [118.31469344406207, 24.431612497163073], [118.3147575749195, 24.431733444293585], [118.31499341250776, 24.431837578444757], [118.31532780912232, 24.431987719424924], [118.3153323898967, 24.432046107535584], [118.31571259426653, 24.432225442277897], [118.31600118312349, 24.43241311789697], [118.31605615242978, 24.432492358630483]
+                ]
+            }
+        }]
     };
 
-    var db;
-    try {
-        if (typeof firebase !== 'undefined') {
-            firebase.initializeApp(firebaseConfig);
-            db = firebase.database();
-            
-            // 監聽連線
-            db.ref(".info/connected").on("value", function(snap) {
-                if (snap.val() === true) {
-                    statusText.innerText = "✅ 系統連線成功";
-                    statusText.style.color = "green";
-                    // 監聽神轎
-                    db.ref('palanquin/location').on('value', function(snapshot) {
-                        var data = snapshot.val();
-                        if (data) {
-                            palanquinMarker.setLatLng([data.lat, data.lng]);
-                            statusText.innerText = "最後更新: " + new Date(data.timestamp).toLocaleTimeString();
-                        }
-                    });
-                } else {
-                    statusText.innerText = "⚠️ 嘗試連線資料庫中...";
-                    statusText.style.color = "orange";
-                }
-            });
-        } else {
-            statusText.innerText = "❌ 找不到 Firebase SDK";
-        }
-    } catch (e) {
-        statusText.innerText = "❌ Firebase 錯誤";
-        console.error(e);
-    }
+    // 2. 初始化地圖
+    const map = L.map('map', { zoomControl: false }).setView([24.433, 118.317], 16);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap'
+    }).addTo(map);
+    L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-    // 3. 功能函式
+    // 繪製繞境路徑 (紅色線條)
+    L.geoJSON(geojsonData, {
+        style: { color: "#d32f2f", weight: 6, opacity: 0.8 }
+    }).addTo(map);
+
+    // 神轎 Marker
+    const palanquinMarker = L.marker([24.4325, 118.316], {
+        icon: L.divIcon({ html: '🏮', className: 'palanquin-icon', iconSize: [40, 40] })
+    }).addTo(map).bindPopup("<b>神轎目前位置</b>");
+
+    // 3. Firebase 設定
+    const firebaseConfig = {
+        apiKey: "AIzaSyAWtgeRkdjtaHdtnoKdgOMQ_PTBMpwmsLI",
+        databaseURL: "https://kinmen-location-default-rtdb.firebaseio.com",
+        projectId: "kinmen-location"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    // 監聽神轎位置更新
+    db.ref('palanquin/location').on('value', (snapshot) => {
+        const data = snapshot.val();
+        if (data && data.lat) {
+            palanquinMarker.setLatLng([data.lat, data.lng]);
+            document.getElementById('statusText').innerText = "最後更新: " + new Date(data.timestamp).toLocaleTimeString();
+            document.getElementById('statusText').style.color = "green";
+        }
+    });
+
+    // 4. 定位功能
+    let userMarker, userCircle;
     function locateUser() {
+        if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
+            alert("❌ 定位失敗：請使用 HTTPS 網址開啟定位功能。");
+            return;
+        }
         map.locate({setView: true, maxZoom: 17});
     }
 
-    map.on('locationfound', function(e) {
-        L.marker(e.latlng).addTo(map).bindPopup("你在這裡").openPopup();
+    map.on('locationfound', (e) => {
+        if (userMarker) {
+            userMarker.setLatLng(e.latlng);
+            userCircle.setLatLng(e.latlng).setRadius(e.accuracy);
+        } else {
+            userMarker = L.marker(e.latlng).addTo(map).bindPopup("你在這裡");
+            userCircle = L.circle(e.latlng, e.accuracy).addTo(map);
+        }
     });
 
-    var isAdmin = false;
-    var watchId;
+    // 5. 管理員發送模式
+    let isAdmin = false, watchId = null;
     function toggleAdminMode() {
         if (!isAdmin) {
-            isAdmin = true;
-            document.getElementById('adminBtn').innerText = "🛑 停止發送";
-            watchId = navigator.geolocation.watchPosition(function(pos) {
-                db.ref('palanquin/location').set({
-                    lat: pos.coords.latitude,
-                    lng: pos.coords.longitude,
-                    timestamp: Date.now()
-                });
-            }, function(err) { alert(err.message); }, { enableHighAccuracy: true });
+            if (confirm("確認要發送您的 GPS 位置作為「神轎位置」嗎？")) {
+                isAdmin = true;
+                document.getElementById('adminBtn').innerText = "🛑 停止發送";
+                document.getElementById('adminBtn').style.background = "#f44336";
+                watchId = navigator.geolocation.watchPosition((pos) => {
+                    db.ref('palanquin/location').set({
+                        lat: pos.coords.latitude,
+                        lng: pos.coords.longitude,
+                        timestamp: Date.now()
+                    });
+                }, (err) => alert(err.message), { enableHighAccuracy: true });
+            }
         } else {
             isAdmin = false;
             document.getElementById('adminBtn').innerText = "📡 開啟神轎定位";
+            document.getElementById('adminBtn').style.background = "#FF9800";
             navigator.geolocation.clearWatch(watchId);
         }
     }
