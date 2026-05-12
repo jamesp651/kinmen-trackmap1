@@ -1,110 +1,135 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2026 金門迎城隍 - 完整路徑演示</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
     <style>
-        /* ... 既有樣式 ... */
-        .palanquin-icon img {
+        body, html { margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden; font-family: "Microsoft JhengHei", sans-serif; }
+        #map { height: 100vh; width: 100%; background: #f8f8f8; }
+        .control-panel {
+            position: absolute; top: 10px; left: 10px; z-index: 1000;
+            background: rgba(255,255,255,0.95); padding: 15px; border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2); width: 220px;
+        }
+        button {
+            width: 100%; padding: 10px; margin-top: 8px; cursor: pointer;
+            border: none; border-radius: 8px; font-weight: bold; transition: 0.3s;
+        }
+        .btn-user { background: #2196F3; color: white; }
+        .btn-demo { background: #4CAF50; color: white; }
+        .status { font-size: 13px; margin-top: 10px; font-weight: bold; color: #2e7d32; }
+        
+        /* 城隍爺 Emoji 圖示樣式 */
+        .palanquin-icon {
+            display: flex;
+            justify-content: center;
+            align-items: center;
             width: 40px;
             height: 40px;
-            filter: drop-shadow(2px 2px 2px rgba(0,0,0,0.5));
+            background: white;
+            border: 2px solid #d32f2f;
+            border-radius: 50%;
+            font-size: 24px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
         }
-        /* 調整控制面板標題 */
-        .panel-title { display: flex; align-items: center; gap: 5px; color:#d32f2f; font-size: 18px; font-weight: bold; }
-        .panel-title img { width: 24px; height: 24px; }
     </style>
 </head>
 <body>
 
 <div class="control-panel">
-    <div class="panel-title">
-        <img src="https://i.imgur.com/your-god-emoji-link.png" alt="icon"> 
-        2026金門迎城隍定位
-    </div>
+    <b style="color:#d32f2f; font-size: 18px;">🏮 2026 金門迎城隍</b>
     <button class="btn-user" onclick="locateUser()">📍 我的位置</button>
-    <hr style="border:0; border-top:1px solid #ddd; margin:10px 0;">
-    <button id="adminBtn" class="btn-admin" onclick="toggleAdminMode()">📡 開啟神轎定位</button>
-    <div id="statusText" class="status">正在同步繞境路線...</div>
+    <button class="btn-demo" onclick="startDemo()">🏃 模擬繞境走動</button>
+    <div id="statusText" class="status">地圖已就緒</div>
 </div>
 
 <div id="map"></div>
 
 <script>
-    // 1. 繞境座標資料 (保持不變)
-    const rawCoords = geojsonData.features[0].geometry.coordinates.map(c => [c[1], c[0]]);
+    // 1. 定義繞境原始座標
+    const rawCoords = [
+        [24.43257, 118.31610], [24.43277, 118.31551], [24.43263, 118.31513], 
+        [24.43276, 118.31502], [24.43265, 118.31465], [24.43304, 118.31444], 
+        [24.43332, 118.31471], [24.43306, 118.31502], [24.43315, 118.31520], 
+        [24.43391, 118.31589], [24.43357, 118.31629], [24.43277, 118.31691],
+        [24.43334, 118.31788], [24.43467, 118.31620], [24.43595, 118.31728],
+        [24.43710, 118.31837], [24.43434, 118.31971], [24.43396, 118.31897],
+        [24.43333, 118.31972], [24.43315, 118.31956], [24.43308, 118.31941],
+        [24.43215, 118.31945], [24.43146, 118.31899], [24.43084, 118.32058],
+        [24.43023, 118.31618], [24.43040, 118.31494], [24.43124, 118.31452],
+        [24.43241, 118.31600], [24.43249, 118.31606]
+    ];
 
-    // 2. 初始化地圖
-    const map = L.map('map', { zoomControl: false }).setView([24.433, 118.317], 16);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+    // 2. 初始化地圖 (設定在金門城隍廟附近)
+    const map = L.map('map', { zoomControl: false }).setView([24.4335, 118.3165], 16);
+    
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap'
+    }).addTo(map);
 
-    // [底層] 完整預定路線：紅色粗線
-    L.polyline(rawCoords, {
+    // 3. 繪製路徑層
+    // 底層：預定路線 (紅色粗實線)
+    const totalPath = L.polyline(rawCoords, {
         color: "#d32f2f",
-        weight: 6,
-        opacity: 0.4 // 降低透明度，讓上層虛線更明顯
+        weight: 8,
+        opacity: 0.3
     }).addTo(map);
 
-    // [中層] 已行經路線：灰色細虛線
-    // 這裡我們初始化一個空的 Polyline
+    // 上層：已行經路線 (灰色虛線，寬度不超過紅線)
     const passedPath = L.polyline([], {
-        color: "#555",
+        color: "#666666",
         weight: 4,
-        dashArray: "5, 10", // 設定虛線樣式
-        opacity: 0.8
+        dashArray: "5, 8",
+        opacity: 0.9
     }).addTo(map);
 
-    // [頂層] 城隍爺自定義圖示
+    // 4. 城隍爺 Emoji Marker
     const godIcon = L.divIcon({
-        html: `<div class="palanquin-icon"><img src="https://i.imgur.com/your-god-emoji-link.png"></div>`,
-        className: 'custom-div-icon',
+        html: '<div class="palanquin-icon">👨‍⚖️</div>', // 使用法官 Emoji 代替城隍爺形象
+        className: '',
         iconSize: [40, 40],
         iconAnchor: [20, 20]
     });
 
-    const palanquinMarker = L.marker(rawCoords[0], { icon: godIcon }).addTo(map).bindPopup("<b>城隍爺在此</b>");
+    const palanquinMarker = L.marker(rawCoords[0], { icon: godIcon }).addTo(map);
 
-    // 3. 邏輯：如何判斷已行經路徑？
-    // 我們需要將神轎當前位置與原始路徑做比對，找到路徑上最接近的點
-    function updatePassedPath(currentLatLng) {
-        let minDistance = Infinity;
-        let closestIndex = 0;
-
-        // 尋找距離神轎最近的路徑節點索引
-        rawCoords.forEach((coord, index) => {
-            const dist = L.latLng(coord).distanceTo(currentLatLng);
-            if (dist < minDistance) {
-                minDistance = dist;
-                closestIndex = index;
-            }
-        });
-
-        // 擷取從起點到該索引的所有座標
-        const newPath = rawCoords.slice(0, closestIndex + 1);
-        // 如果目前位置不在節點上，把當前精準位置也補進去最後一個點
-        newPath.push([currentLatLng.lat, currentLatLng.lng]);
-        
-        passedPath.setLatLngs(newPath);
+    // 5. 更新已行經軌跡的邏輯
+    function updatePassedPath(currentIndex) {
+        const pathSoFar = rawCoords.slice(0, currentIndex + 1);
+        passedPath.setLatLngs(pathSoFar);
+        palanquinMarker.setLatLng(rawCoords[currentIndex]);
     }
 
-    // 4. Firebase 監聽 (更新時觸發路徑計算)
-    const firebaseConfig = { /* ... 您的設定 ... */ };
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.database();
+    // 6. 功能按鈕：模擬走動
+    let step = 0;
+    function startDemo() {
+        if (step >= rawCoords.length) step = 0;
+        const interval = setInterval(() => {
+            if (step < rawCoords.length) {
+                updatePassedPath(step);
+                document.getElementById('statusText').innerText = "城隍爺巡安中...";
+                step++;
+            } else {
+                clearInterval(interval);
+                document.getElementById('statusText').innerText = "繞境圓滿完成！";
+            }
+        }, 500);
+    }
 
-    db.ref('palanquin/location').on('value', (snapshot) => {
-        const data = snapshot.val();
-        if (data && data.lat) {
-            const currentPos = L.latLng(data.lat, data.lng);
-            palanquinMarker.setLatLng(currentPos);
-            
-            // 觸發更新虛線軌跡
-            updatePassedPath(currentPos);
+    // 7. 我的位置
+    function locateUser() {
+        map.locate({setView: true, maxZoom: 17});
+    }
 
-            document.getElementById('statusText').innerText = "最後更新: " + new Date(data.timestamp).toLocaleTimeString();
-            document.getElementById('statusText').style.color = "green";
-        }
+    map.on('locationfound', (e) => {
+        L.marker(e.latlng).addTo(map).bindPopup("你在這裡").openPopup();
     });
-
-    // ... 其餘定位與管理員功能保持不變 ...
 </script>
+
 </body>
 </html>
