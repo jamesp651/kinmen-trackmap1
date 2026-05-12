@@ -1,32 +1,260 @@
-// 6. 長官狀態回報功能
-function reportStatus(person, action) {
-    const now = Date.now();
-    const actionKey = action === '蒞轄' ? '蒞' : '離';
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>2026 金門迎城隍 - 即時繞境與長官動態</title>
     
-    // 寫入 Firebase
-    db.ref(`officials/${person}/${actionKey}`).set({
-        timestamp: now,
-        status: action
-    });
-}
+    <!-- Leaflet & Firebase SDK -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
 
-// 監聽長官狀態更新 UI
-db.ref('officials').on('value', (snapshot) => {
-    const data = snapshot.val();
-    if (data) {
-        Object.keys(data).forEach(person => {
-            // 更新蒞轄時間
-            if (data[person].蒞) {
-                const timeStr = new Date(data[person].蒞.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-                const el = document.getElementById(`time-${person}-蒞`);
-                if (el) el.innerText = timeStr;
-            }
-            // 更新離轄時間
-            if (data[person].離) {
-                const timeStr = new Date(data[person].離.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-                const el = document.getElementById(`time-${person}-離`);
-                if (el) el.innerText = timeStr;
+    <style>
+        body, html { margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden; font-family: "Microsoft JhengHei", sans-serif; background: #f4f4f4; }
+        #map { height: 100vh; width: 100%; z-index: 1; }
+        
+        /* 控制面板：增加捲動支援以防內容過多 */
+        .control-panel {
+            position: absolute; top: 10px; left: 10px; z-index: 1000;
+            background: rgba(255,255,255,0.95); padding: 12px; border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2); width: 240px;
+            max-height: 90vh; overflow-y: auto;
+        }
+
+        /* 按鈕基本樣式 */
+        button {
+            width: 100%; padding: 10px; cursor: pointer;
+            border: none; border-radius: 6px; font-weight: bold; transition: 0.2s;
+        }
+        .btn-user { background: #2196F3; color: white; margin-bottom: 8px; }
+        .btn-admin { background: #FF9800; color: white; margin-bottom: 5px; }
+        
+        .status-info { font-size: 12px; margin-bottom: 10px; text-align: center; font-weight: bold; }
+        
+        /* 回報區塊排版 */
+        .report-section {
+            margin-top: 10px; padding-top: 10px; border-top: 1px solid #eee;
+        }
+        .report-title { font-size: 14px; font-weight: bold; color: #333; margin-bottom: 8px; display: block; border-left: 4px solid #d32f2f; padding-left: 8px; }
+        
+        .btn-grid {
+            display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px;
+        }
+        
+        .report-item { display: flex; flex-direction: column; align-items: center; }
+        
+        .btn-report {
+            padding: 8px 4px; font-size: 12px; background: #fff; color: #333; border: 1px solid #ccc; width: 100%;
+        }
+        .btn-report:active { background: #eee; }
+        .btn-arrived { border-bottom: 3px solid #4CAF50; } /* 蒞轄綠色線條 */
+        .btn-left { border-bottom: 3px solid #f44336; }    /* 離轄紅色線條 */
+
+        .time-label { font-size: 10px; color: #888; margin-top: 2px; height: 14px; }
+
+        /* 城隍爺圖示 */
+        .god-marker {
+            display: flex; justify-content: center; align-items: center;
+            width: 44px; height: 44px; background: white;
+            border: 2px solid #d32f2f; border-radius: 50%;
+            font-size: 26px; box-shadow: 0 0 10px rgba(0,0,0,0.4);
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0px rgba(211, 47, 47, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(211, 47, 47, 0); }
+            100% { box-shadow: 0 0 0 0px rgba(211, 47, 47, 0); }
+        }
+    </style>
+</head>
+<body>
+
+<div class="control-panel">
+    <div style="text-align:center; margin-bottom:10px;">
+        <b style="color:#d32f2f; font-size: 18px;">🏮 2026 金門迎城隍</b>
+    </div>
+    
+    <button class="btn-user" onclick="locateUser()">📍 我的位置</button>
+    <button id="adminBtn" class="btn-admin" onclick="toggleAdminMode()">📡 開啟神轎定位</button>
+    <div id="statusText" class="status-info" style="color:#d32f2f;">連線中...</div>
+
+    <!-- 蒞轄回報區 -->
+    <div class="report-section">
+        <span class="report-title">📌 長官蒞轄回報</span>
+        <div class="btn-grid">
+            <div class="report-item">
+                <button class="btn-report btn-arrived" onclick="reportStatus('縣長', '蒞轄')">縣長蒞轄</button>
+                <span id="time-縣長-蒞" class="time-label">--:--</span>
+            </div>
+            <div class="report-item">
+                <button class="btn-report btn-arrived" onclick="reportStatus('副縣長李', '蒞轄')">副縣(李)蒞</button>
+                <span id="time-副縣長李-蒞" class="time-label">--:--</span>
+            </div>
+            <div class="report-item">
+                <button class="btn-report btn-arrived" onclick="reportStatus('副縣長陳', '蒞轄')">副縣(陳)蒞</button>
+                <span id="time-副縣長陳-蒞" class="time-label">--:--</span>
+            </div>
+            <div class="report-item">
+                <button class="btn-report btn-arrived" onclick="reportStatus('議長', '蒞轄')">議長蒞轄</button>
+                <span id="time-議長-蒞" class="time-label">--:--</span>
+            </div>
+            <div class="report-item">
+                <button class="btn-report btn-arrived" onclick="reportStatus('副議長', '蒞轄')">副議長蒞</button>
+                <span id="time-副議長-蒞" class="time-label">--:--</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 離轄回報區 -->
+    <div class="report-section">
+        <span class="report-title">🚶 長官離轄回報</span>
+        <div class="btn-grid">
+            <div class="report-item">
+                <button class="btn-report btn-left" onclick="reportStatus('縣長', '離轄')">縣長離轄</button>
+                <span id="time-縣長-離" class="time-label">--:--</span>
+            </div>
+            <div class="report-item">
+                <button class="btn-report btn-left" onclick="reportStatus('副縣長李', '離轄')">副縣(李)離</button>
+                <span id="time-副縣長李-離" class="time-label">--:--</span>
+            </div>
+            <div class="report-item">
+                <button class="btn-report btn-left" onclick="reportStatus('副縣長陳', '離轄')">副縣(陳)離</button>
+                <span id="time-副縣長陳-離" class="time-label">--:--</span>
+            </div>
+            <div class="report-item">
+                <button class="btn-report btn-left" onclick="reportStatus('議長', '離轄')">議長離轄</button>
+                <span id="time-議長-離" class="time-label">--:--</span>
+            </div>
+            <div class="report-item">
+                <button class="btn-report btn-left" onclick="reportStatus('副議長', '離轄')">副議長離</button>
+                <span id="time-副議長-離" class="time-label">--:--</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="map"></div>
+
+<script>
+    // 1. 繞境路線座標
+    const routePoints = [
+        [24.43257, 118.31610], [24.43277, 118.31551], [24.43263, 118.31513], 
+        [24.43276, 118.31502], [24.43265, 118.31465], [24.43304, 118.31444], 
+        [24.43332, 118.31471], [24.43306, 118.31502], [24.43315, 118.31520], 
+        [24.43391, 118.31589], [24.43357, 118.31629], [24.43277, 118.31691],
+        [24.43334, 118.31788], [24.43467, 118.31620], [24.43595, 118.31728],
+        [24.43710, 118.31837], [24.43434, 118.31971], [24.43396, 118.31897],
+        [24.43333, 118.31972], [24.43315, 118.31956], [24.43308, 118.31941],
+        [24.43215, 118.31945], [24.43146, 118.31899], [24.43084, 118.32058],
+        [24.43023, 118.31618], [24.43040, 118.31494], [24.43124, 118.31452],
+        [24.43241, 118.31600], [24.43249, 118.31606]
+    ];
+
+    // 2. 初始化地圖
+    const map = L.map('map', { zoomControl: false }).setView([24.4335, 118.3165], 16);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OSM' }).addTo(map);
+
+    L.polyline(routePoints, { color: "#d32f2f", weight: 8, opacity: 0.3 }).addTo(map);
+    const passedPath = L.polyline([], { color: "#555555", weight: 4, dashArray: "5, 8", opacity: 0.8 }).addTo(map);
+
+    const godIcon = L.divIcon({
+        html: '<div class="god-marker">👨‍⚖️</div>',
+        className: '', iconSize: [44, 44], iconAnchor: [22, 22]
+    });
+    const palanquinMarker = L.marker(routePoints[0], { icon: godIcon }).addTo(map);
+
+    // 3. Firebase 設定
+    const firebaseConfig = {
+        apiKey: "AIzaSyAWtgeRkdjtaHdtnoKdgOMQ_PTBMpwmsLI", 
+        databaseURL: "https://kinmen-location-default-rtdb.firebaseio.com",
+        projectId: "kinmen-location"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    // 4. 同步神轎位置
+    function syncPalanquin(lat, lng) {
+        const currentPos = L.latLng(lat, lng);
+        let minDistance = Infinity;
+        let closestIndex = 0;
+
+        routePoints.forEach((point, index) => {
+            const dist = L.latLng(point).distanceTo(currentPos);
+            if (dist < minDistance) {
+                minDistance = dist;
+                closestIndex = index;
             }
         });
+
+        const newPath = routePoints.slice(0, closestIndex + 1);
+        passedPath.setLatLngs(newPath);
+        palanquinMarker.setLatLng(routePoints[closestIndex]);
+        map.panTo(routePoints[closestIndex]);
     }
-});
+
+    // 監聽神轎位置
+    db.ref('palanquin/location').on('value', (snapshot) => {
+        const data = snapshot.val();
+        if (data && data.lat) {
+            syncPalanquin(data.lat, data.lng);
+            document.getElementById('statusText').innerText = "最後更新: " + new Date(data.timestamp).toLocaleTimeString();
+            document.getElementById('statusText').style.color = "green";
+        }
+    });
+
+    // 5. 管理員與定位功能
+    function locateUser() { map.locate({setView: true, maxZoom: 17}); }
+
+    let isAdmin = false, watchId = null;
+    function toggleAdminMode() {
+        if (!isAdmin) {
+            if (confirm("確認開啟「神轎位置發送」？")) {
+                isAdmin = true;
+                document.getElementById('adminBtn').innerText = "🛑 停止發送位置";
+                document.getElementById('adminBtn').style.background = "#f44336";
+                watchId = navigator.geolocation.watchPosition((pos) => {
+                    db.ref('palanquin/location').set({
+                        lat: pos.coords.latitude, lng: pos.coords.longitude, timestamp: Date.now()
+                    });
+                }, (err) => console.error(err), { enableHighAccuracy: true });
+            }
+        } else {
+            isAdmin = false;
+            document.getElementById('adminBtn').innerText = "📡 開啟神轎定位";
+            document.getElementById('adminBtn').style.background = "#FF9800";
+            navigator.geolocation.clearWatch(watchId);
+        }
+    }
+
+    // 6. 長官回報邏輯
+    function reportStatus(person, action) {
+        if (!confirm(`確認回報 ${person} - ${action}？`)) return;
+        const actionKey = action === '蒞轄' ? '蒞' : '離';
+        db.ref(`officials/${person}/${actionKey}`).set({
+            timestamp: Date.now(),
+            status: action
+        });
+    }
+
+    // 監聽長官回報並更新 UI 時間
+    db.ref('officials').on('value', (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+            Object.keys(data).forEach(person => {
+                if (data[person].蒞) {
+                    const t = new Date(data[person].蒞.timestamp);
+                    document.getElementById(`time-${person}-蒞`).innerText = t.getHours() + ":" + String(t.getMinutes()).padStart(2, '0');
+                }
+                if (data[person].離) {
+                    const t = new Date(data[person].離.timestamp);
+                    document.getElementById(`time-${person}-離`).innerText = t.getHours() + ":" + String(t.getMinutes()).padStart(2, '0');
+                }
+            });
+        }
+    });
+</script>
+
+</body>
+</html>
