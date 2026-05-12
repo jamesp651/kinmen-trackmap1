@@ -32,7 +32,7 @@
 <body>
 
 <div class="control-panel">
-    <b style="color:#d32f2f; font-size: 18px;">🏮 2026 迎城隍定位</b>
+    <b style="color:#d32f2f; font-size: 18px;">👮‍♂️ 2026年金門迎城隍定位</b>
     <button class="btn-user" onclick="locateUser()">📍 我的位置</button>
     <hr style="border:0; border-top:1px solid #ddd; margin:10px 0;">
     <button id="adminBtn" class="btn-admin" onclick="toggleAdminMode()">📡 開啟神轎定位</button>
@@ -70,7 +70,7 @@
 
     // 神轎 Marker
     const palanquinMarker = L.marker([24.4325, 118.316], {
-        icon: L.divIcon({ html: '🏮', className: 'palanquin-icon', iconSize: [40, 40] })
+        icon: L.divIcon({ html: '👮‍♂️', className: 'palanquin-icon', iconSize: [40, 40] })
     }).addTo(map).bindPopup("<b>神轎目前位置</b>");
 
     // 3. Firebase 設定
