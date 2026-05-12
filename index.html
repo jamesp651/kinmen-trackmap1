@@ -1,163 +1,32 @@
-<!DOCTYPE html>
-<html lang="zh-TW">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>2026 金門迎城隍 - 即時繞境定位</title>
+// 6. 長官狀態回報功能
+function reportStatus(person, action) {
+    const now = Date.now();
+    const actionKey = action === '蒞轄' ? '蒞' : '離';
     
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
-
-    <style>
-        body, html { margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden; font-family: "Microsoft JhengHei", sans-serif; }
-        #map { height: 100vh; width: 100%; background: #f8f8f8; }
-        
-        /* 控制面板 */
-        .control-panel {
-            position: absolute; top: 10px; left: 10px; z-index: 1000;
-            background: rgba(255,255,255,0.95); padding: 15px; border-radius: 12px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2); width: 220px;
-        }
-        button {
-            width: 100%; padding: 12px; margin-top: 8px; cursor: pointer;
-            border: none; border-radius: 8px; font-weight: bold; transition: 0.3s;
-        }
-        .btn-user { background: #2196F3; color: white; }
-        .btn-admin { background: #FF9800; color: white; }
-        .status { font-size: 13px; margin-top: 10px; font-weight: bold; color: #d32f2f; }
-        
-        /* 城隍爺自定義圖示 */
-        .god-marker {
-            display: flex; justify-content: center; align-items: center;
-            width: 44px; height: 44px; background: white;
-            border: 2px solid #d32f2f; border-radius: 50%;
-            font-size: 26px; box-shadow: 0 0 10px rgba(0,0,0,0.4);
-            animation: pulse 2s infinite;
-        }
-        @keyframes pulse {
-            0% { box-shadow: 0 0 0 0px rgba(211, 47, 47, 0.7); }
-            70% { box-shadow: 0 0 0 10px rgba(211, 47, 47, 0); }
-            100% { box-shadow: 0 0 0 0px rgba(211, 47, 47, 0); }
-        }
-    </style>
-</head>
-<body>
-
-<div class="control-panel">
-    <b style="color:#d32f2f; font-size: 18px;">🏮 2026 金門迎城隍</b>
-    <button class="btn-user" onclick="locateUser()">📍 我的位置</button>
-    <hr style="border:0; border-top:1px solid #ddd; margin:10px 0;">
-    <button id="adminBtn" class="btn-admin" onclick="toggleAdminMode()">📡 發送神轎位置</button>
-    <div id="statusText" class="status">連線中...</div>
-</div>
-
-<div id="map"></div>
-
-<script>
-    // 1. 繞境預定路線座標 (Lat, Lng)
-    const routePoints = [
-        [24.43257, 118.31610], [24.43277, 118.31551], [24.43263, 118.31513], 
-        [24.43276, 118.31502], [24.43265, 118.31465], [24.43304, 118.31444], 
-        [24.43332, 118.31471], [24.43306, 118.31502], [24.43315, 118.31520], 
-        [24.43391, 118.31589], [24.43357, 118.31629], [24.43277, 118.31691],
-        [24.43334, 118.31788], [24.43467, 118.31620], [24.43595, 118.31728],
-        [24.43710, 118.31837], [24.43434, 118.31971], [24.43396, 118.31897],
-        [24.43333, 118.31972], [24.43315, 118.31956], [24.43308, 118.31941],
-        [24.43215, 118.31945], [24.43146, 118.31899], [24.43084, 118.32058],
-        [24.43023, 118.31618], [24.43040, 118.31494], [24.43124, 118.31452],
-        [24.43241, 118.31600], [24.43249, 118.31606]
-    ];
-
-    // 2. 初始化地圖
-    const map = L.map('map', { zoomControl: false }).setView([24.4335, 118.3165], 16);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OS M' }).addTo(map);
-
-    // [底層] 預定紅色路線
-    L.polyline(routePoints, { color: "#d32f2f", weight: 8, opacity: 0.3 }).addTo(map);
-
-    // [上層] 已行經灰色虛線
-    const passedPath = L.polyline([], { color: "#555555", weight: 4, dashArray: "5, 8", opacity: 0.8 }).addTo(map);
-
-    // [圖示] 城隍爺 Emoji
-    const godIcon = L.divIcon({
-        html: '<div class="god-marker">👨‍⚖️</div>',
-        className: '', iconSize: [44, 44], iconAnchor: [22, 22]
+    // 寫入 Firebase
+    db.ref(`officials/${person}/${actionKey}`).set({
+        timestamp: now,
+        status: action
     });
-    const palanquinMarker = L.marker(routePoints[0], { icon: godIcon }).addTo(map);
+}
 
-    // 3. 計算並更新已行經路徑
-    function syncPalanquin(lat, lng) {
-        const currentPos = L.latLng(lat, lng);
-        
-        // 尋找路徑上最接近神轎的點索引
-        let minDistance = Infinity;
-        let closestIndex = 0;
-
-        routePoints.forEach((point, index) => {
-            const dist = L.latLng(point).distanceTo(currentPos);
-            if (dist < minDistance) {
-                minDistance = dist;
-                closestIndex = index;
+// 監聽長官狀態更新 UI
+db.ref('officials').on('value', (snapshot) => {
+    const data = snapshot.val();
+    if (data) {
+        Object.keys(data).forEach(person => {
+            // 更新蒞轄時間
+            if (data[person].蒞) {
+                const timeStr = new Date(data[person].蒞.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                const el = document.getElementById(`time-${person}-蒞`);
+                if (el) el.innerText = timeStr;
+            }
+            // 更新離轄時間
+            if (data[person].離) {
+                const timeStr = new Date(data[person].離.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                const el = document.getElementById(`time-${person}-離`);
+                if (el) el.innerText = timeStr;
             }
         });
-
-        // 擷取起點到目前點的座標
-        const newPath = routePoints.slice(0, closestIndex + 1);
-        
-        // 更新 UI
-        passedPath.setLatLngs(newPath);
-        palanquinMarker.setLatLng(routePoints[closestIndex]); // 讓圖示自動吸附在紅線上
-        map.panTo(routePoints[closestIndex]);
     }
-
-    // 4. Firebase 即時通訊
-    const firebaseConfig = {
-        apiKey: "AIzaSyAWtgeRkdjtaHdtnoKdgOMQ_PTBMpwmsLI", // 建議換成您自己的 Key
-        databaseURL: "https://kinmen-location-default-rtdb.firebaseio.com",
-        projectId: "kinmen-location"
-    };
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.database();
-
-    // 監聽位置更新
-    db.ref('palanquin/location').on('value', (snapshot) => {
-        const data = snapshot.val();
-        if (data && data.lat) {
-            syncPalanquin(data.lat, data.lng);
-            document.getElementById('statusText').innerText = "最後更新: " + new Date(data.timestamp).toLocaleTimeString();
-            document.getElementById('statusText').style.color = "green";
-        }
-    });
-
-    // 5. 定位與管理員功能 (發送位置)
-    function locateUser() {
-        map.locate({setView: true, maxZoom: 17});
-    }
-
-    let isAdmin = false, watchId = null;
-    function toggleAdminMode() {
-        if (!isAdmin) {
-            if (confirm("確認開啟「神轎位置發送」？這會覆蓋目前的定位。")) {
-                isAdmin = true;
-                document.getElementById('adminBtn').innerText = "🛑 停止發送";
-                document.getElementById('adminBtn').style.background = "#f44336";
-                watchId = navigator.geolocation.watchPosition((pos) => {
-                    db.ref('palanquin/location').set({
-                        lat: pos.coords.latitude, lng: pos.coords.longitude, timestamp: Date.now()
-                    });
-                }, (err) => console.error(err), { enableHighAccuracy: true });
-            }
-        } else {
-            isAdmin = false;
-            document.getElementById('adminBtn').innerText = "📡 發送神轎位置";
-            document.getElementById('adminBtn').style.background = "#FF9800";
-            navigator.geolocation.clearWatch(watchId);
-        }
-    }
-</script>
-
-</body>
-</html>
+});
