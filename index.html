@@ -14,7 +14,6 @@
         body, html { margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden; font-family: "Microsoft JhengHei", sans-serif; }
         #map { height: 100vh; width: 100%; z-index: 1; }
         
-        /* 控制面板基礎樣式 */
         .control-panel {
             position: absolute; top: 10px; left: 10px; z-index: 1000;
             background: rgba(255,255,255,0.98); border-radius: 12px;
@@ -23,10 +22,7 @@
             max-height: 90vh; display: flex; flex-direction: column;
         }
 
-        /* 當面板被縮小時的樣式 */
-        .control-panel.minimized {
-            width: 140px; height: 40px; overflow: hidden;
-        }
+        .control-panel.minimized { width: 140px; height: 40px; overflow: hidden; }
 
         .panel-header {
             padding: 10px; display: flex; justify-content: space-between; align-items: center;
@@ -36,32 +32,24 @@
         .panel-content { padding: 10px; overflow-y: auto; }
         .control-panel.minimized .panel-content { display: none; }
 
-        /* 按鈕優化 */
-        button {
-            width: 100%; padding: 8px; cursor: pointer;
-            border: none; border-radius: 6px; font-weight: bold; margin-bottom: 5px;
-        }
+        button { width: 100%; padding: 8px; cursor: pointer; border: none; border-radius: 6px; font-weight: bold; margin-bottom: 5px; }
         .btn-toggle { background: none; color: white; width: auto; margin: 0; padding: 2px 5px; font-size: 12px; border: 1px solid white; }
         .btn-user { background: #2196F3; color: white; }
         .btn-admin { background: #FF9800; color: white; font-size: 13px; }
         
         .status-info { font-size: 11px; margin: 5px 0; text-align: center; color: #666; }
 
-        /* 回報區塊緊湊化 */
         .report-section { margin-top: 8px; padding-top: 8px; border-top: 1px solid #eee; }
         .report-title { font-size: 13px; font-weight: bold; margin-bottom: 5px; display: block; color: #333; }
         
         .btn-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; }
         .report-item { display: flex; flex-direction: column; align-items: center; margin-bottom: 4px; }
         
-        .btn-report {
-            padding: 5px 2px; font-size: 11px; background: #fdfdfd; border: 1px solid #ddd; width: 100%; margin: 0;
-        }
+        .btn-report { padding: 5px 2px; font-size: 11px; background: #fdfdfd; border: 1px solid #ddd; width: 100%; margin: 0; }
         .btn-arrived { border-left: 3px solid #4CAF50; }
         .btn-left { border-left: 3px solid #f44336; }
-        .time-label { font-size: 10px; color: #999; transform: scale(0.9); }
+        .time-label { font-size: 10px; color: #d32f2f; font-weight: bold; transform: scale(0.9); height: 14px; }
 
-        /* 城隍爺動畫圖示 */
         .god-marker {
             display: flex; justify-content: center; align-items: center;
             width: 40px; height: 40px; background: white;
@@ -87,11 +75,10 @@
     <div class="panel-content">
         <button class="btn-user" onclick="locateUser()">📍 我的位置</button>
         <button id="adminBtn" class="btn-admin" onclick="toggleAdminMode()">📡 開啟神轎定位</button>
-        <div id="statusText" class="status-info">連線中...</div>
+        <div id="statusText" class="status-info">讀取中...</div>
 
-        <!-- 蒞轄 -->
         <div class="report-section">
-            <span class="report-title">📌 蒞轄回報</span>
+            <span class="report-title">📌 蒞轄回報 (點擊更新)</span>
             <div class="btn-grid">
                 <div class="report-item"><button class="btn-report btn-arrived" onclick="reportStatus('縣長', '蒞轄')">縣長</button><span id="time-縣長-蒞" class="time-label">--:--</span></div>
                 <div class="report-item"><button class="btn-report btn-arrived" onclick="reportStatus('副縣長李', '蒞轄')">副(李)</button><span id="time-副縣長李-蒞" class="time-label">--:--</span></div>
@@ -101,9 +88,8 @@
             </div>
         </div>
 
-        <!-- 離轄 -->
         <div class="report-section">
-            <span class="report-title">🚶 離轄回報</span>
+            <span class="report-title">🚶 離轄回報 (點擊更新)</span>
             <div class="btn-grid">
                 <div class="report-item"><button class="btn-report btn-left" onclick="reportStatus('縣長', '離轄')">縣長</button><span id="time-縣長-離" class="time-label">--:--</span></div>
                 <div class="report-item"><button class="btn-report btn-left" onclick="reportStatus('副縣長李', '離轄')">副(李)</button><span id="time-副縣長李-離" class="time-label">--:--</span></div>
@@ -118,31 +104,27 @@
 <div id="map"></div>
 
 <script>
-    // 1. 路線與初始化 (略同前版，保持不變)
+    // 1. 路線座標
     const routePoints = [[24.43257, 118.31610], [24.43277, 118.31551], [24.43263, 118.31513], [24.43276, 118.31502], [24.43265, 118.31465], [24.43304, 118.31444], [24.43332, 118.31471], [24.43306, 118.31502], [24.43315, 118.31520], [24.43391, 118.31589], [24.43357, 118.31629], [24.43277, 118.31691], [24.43334, 118.31788], [24.43467, 118.31620], [24.43595, 118.31728], [24.43710, 118.31837], [24.43434, 118.31971], [24.43396, 118.31897], [24.43333, 118.31972], [24.43315, 118.31956], [24.43308, 118.31941], [24.43215, 118.31945], [24.43146, 118.31899], [24.43084, 118.32058], [24.43023, 118.31618], [24.43040, 118.31494], [24.43124, 118.31452], [24.43241, 118.31600], [24.43249, 118.31606]];
 
+    // 2. 初始化地圖
     const map = L.map('map', { zoomControl: false }).setView([24.4335, 118.3165], 16);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OSM' }).addTo(map);
 
     L.polyline(routePoints, { color: "#d32f2f", weight: 6, opacity: 0.3 }).addTo(map);
     const passedPath = L.polyline([], { color: "#555", weight: 4, dashArray: "5, 8", opacity: 0.8 }).addTo(map);
     const godIcon = L.divIcon({ html: '<div class="god-marker">👨‍⚖️</div>', className: '', iconSize: [40, 40], iconAnchor: [20, 20] });
     const palanquinMarker = L.marker(routePoints[0], { icon: godIcon }).addTo(map);
 
-    // 2. 面板縮放功能
+    // 3. 面板縮放功能
     function togglePanel() {
         const panel = document.getElementById('mainPanel');
         const btn = document.getElementById('toggleBtn');
-        if (panel.classList.contains('minimized')) {
-            panel.classList.remove('minimized');
-            btn.innerText = "收合";
-        } else {
-            panel.classList.add('minimized');
-            btn.innerText = "展開";
-        }
+        panel.classList.toggle('minimized');
+        btn.innerText = panel.classList.contains('minimized') ? "展開" : "收合";
     }
 
-    // 3. Firebase 邏輯
+    // 4. Firebase 設定
     const firebaseConfig = {
         apiKey: "AIzaSyAWtgeRkdjtaHdtnoKdgOMQ_PTBMpwmsLI", 
         databaseURL: "https://kinmen-location-default-rtdb.firebaseio.com",
@@ -151,7 +133,7 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
-    // 4. 定位與同步 (與前版一致)
+    // 5. 神轎定位同步邏輯
     function syncPalanquin(lat, lng) {
         const currentPos = L.latLng(lat, lng);
         let minDist = Infinity, closestIdx = 0;
@@ -168,7 +150,7 @@
         const d = s.val();
         if(d) {
             syncPalanquin(d.lat, d.lng);
-            document.getElementById('statusText').innerText = "最後更新: " + new Date(d.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            document.getElementById('statusText').innerText = "最後定位: " + new Date(d.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});
         }
     });
 
@@ -177,9 +159,10 @@
     let isAdmin = false, watchId = null;
     function toggleAdminMode() {
         if (!isAdmin) {
-            if (confirm("啟動發送定位？")) {
+            if (confirm("啟動發送定位？這會即時更新神轎座標。")) {
                 isAdmin = true;
                 document.getElementById('adminBtn').innerText = "🛑 停止發送";
+                document.getElementById('adminBtn').style.background = "#f44336";
                 watchId = navigator.geolocation.watchPosition((p) => {
                     db.ref('palanquin/location').set({ lat: p.coords.latitude, lng: p.coords.longitude, timestamp: Date.now() });
                 }, null, { enableHighAccuracy: true });
@@ -187,24 +170,38 @@
         } else {
             isAdmin = false;
             document.getElementById('adminBtn').innerText = "📡 開啟神轎定位";
+            document.getElementById('adminBtn').style.background = "#FF9800";
             navigator.geolocation.clearWatch(watchId);
         }
     }
 
+    // 6. 重點修正：長官回報邏輯 (支援重複更新)
     function reportStatus(person, action) {
+        if (!confirm(`確認更新 ${person} 的${action}時間？`)) return;
         const key = action === '蒞轄' ? '蒞' : '離';
-        db.ref(`officials/${person}/${key}`).set({ timestamp: Date.now() });
+        // 使用 .set() 覆蓋該節點，這會觸發所有客戶端的監聽器並更新時間
+        db.ref(`officials/${person}/${key}`).set({
+            timestamp: Date.now(),
+            updateId: Math.random().toString(36).substring(7) // 加入隨機 ID 確保資料變動觸發更新
+        });
     }
 
+    // 監聽回報資料庫
     db.ref('officials').on('value', (s) => {
         const d = s.val();
         if(d) {
             Object.keys(d).forEach(p => {
                 ['蒞', '離'].forEach(k => {
-                    if(d[p][k]) {
+                    if(d[p][k] && d[p][k].timestamp) {
                         const t = new Date(d[p][k].timestamp);
+                        const timeStr = t.getHours() + ":" + String(t.getMinutes()).padStart(2, '0') + ":" + String(t.getSeconds()).padStart(2, '0');
                         const el = document.getElementById(`time-${p}-${k}`);
-                        if(el) el.innerText = t.getHours() + ":" + String(t.getMinutes()).padStart(2, '0');
+                        if(el) {
+                            el.innerText = timeStr;
+                            // 視覺反饋：短暫閃爍表示已更新
+                            el.style.color = "#4CAF50";
+                            setTimeout(() => { el.style.color = "#d32f2f"; }, 1000);
+                        }
                     }
                 });
             });
