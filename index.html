@@ -72,8 +72,8 @@
     
     <div class="panel-content">
         <!-- 已移除「我的目前位置」按鈕 -->
-        <button id="tailBtn" class="btn-tail" onclick="toggleTailMode()">🚩 隊伍尾端定位回報</button>
-        <button id="adminBtn" class="btn-admin" onclick="toggleAdminMode()">📡 神轎位置回報 (頭)</button>
+        <button id="tailBtn" class="btn-tail" onclick="toggleTailMode()">🚩 隊伍尾端回報</button>
+        <button id="adminBtn" class="btn-admin" onclick="toggleAdminMode()">📡 神轎位置回報</button>
         
         <div id="statusText" class="status-info">等待數據中...</div>
         <div id="distanceText" class="dist-info">隊伍長度: -- 公尺</div>
@@ -214,7 +214,7 @@
     }
 
     // 5. 長官回報系統
-    const officials = ['縣長', '副縣長李', '副縣長陳', '議長', '副議長'];
+    const officials = ['縣長', '李副縣長', '陳副縣長', '議長', '副議長'];
     
     function initGrids() {
         const arrivalGrid = document.getElementById('arrivalGrid');
