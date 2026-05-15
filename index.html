@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>2026 金門迎城隍 - 綜合指揮系統</title>
+    <title>2026 金門迎城隍 - 綜合指揮調度系統</title>
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -18,143 +18,171 @@
             position: absolute; top: 10px; left: 10px; z-index: 1000;
             background: rgba(255,255,255,0.98); border-radius: 12px;
             box-shadow: 0 4px 15px rgba(0,0,0,0.2); 
-            width: 280px; transition: all 0.3s ease;
-            max-height: 90vh; display: flex; flex-direction: column;
+            width: 290px; transition: all 0.3s ease;
+            max-height: 92vh; display: flex; flex-direction: column;
         }
 
         .control-panel.minimized { width: 140px; height: 40px; overflow: hidden; }
         .panel-header {
             padding: 10px; display: flex; justify-content: space-between; align-items: center;
-            background: #1565C0; color: white; border-radius: 12px 12px 0 0; cursor: pointer;
+            background: #1a237e; color: white; border-radius: 12px 12px 0 0; cursor: pointer;
         }
 
-        .panel-content { padding: 10px; overflow-y: auto; }
-        .live-clock { background: #0D47A1; color: #fff; text-align: center; font-size: 14px; padding: 4px 0; font-family: monospace; }
+        .panel-content { padding: 10px; overflow-y: auto; flex-grow: 1; }
+        .live-clock { background: #0d47a1; color: #fff; text-align: center; font-size: 14px; padding: 4px 0; font-family: monospace; }
         
-        /* 警力統計區塊 */
-        .police-stats {
-            background: #e3f2fd; padding: 10px; border-radius: 8px; margin-bottom: 10px;
-            font-size: 12px; border: 1px solid #bbdefb; line-height: 1.6;
+        /* 勤務統計區塊 */
+        .duty-dashboard {
+            background: #f5f5f5; padding: 8px; border-radius: 8px; margin-bottom: 10px;
+            border-left: 5px solid #3f51b5; font-size: 12px;
         }
-        .stat-row { display: flex; justify-content: space-between; }
-        .highlight { font-weight: bold; color: #d32f2f; }
+        .duty-stat { display: flex; justify-content: space-between; margin: 2px 0; }
+        .duty-stat b { color: #d32f2f; font-size: 14px; }
 
-        button { width: 100%; padding: 8px; cursor: pointer; border: none; border-radius: 6px; font-weight: bold; margin-bottom: 5px; }
-        .btn-jump { background: #FF9800; color: white; }
-        .btn-toggle-layer { background: #455A64; color: white; font-size: 12px; }
+        button { width: 100%; padding: 8px; cursor: pointer; border: none; border-radius: 6px; font-weight: bold; margin-bottom: 5px; transition: 0.2s; }
+        .btn-main-duty { background: #3f51b5; color: white; }
+        .btn-jump { background: #ef6c00; color: white; }
+        .btn-hide { background: #78909c; color: white; font-size: 12px; }
         
-        /* 警力圖示 CSS */
+        /* 警力 Marker 樣式 */
         .p-marker { 
-            width: 20px; height: 20px; border-radius: 50%; border: 2px solid white;
+            width: 20px; height: 20px; border-radius: 50%; border: 2px solid #fff;
             display: flex; align-items: center; justify-content: center;
             color: white; font-size: 9px; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.3);
         }
-        .p-on { background: #1565C0; } /* 正常在崗 (藍) */
-        .p-jump { background: #E65100; animation: blink 2s infinite; } /* 跳崗中 (橘) */
-        .p-off { background: #9E9E9E; opacity: 0.5; } /* 未到崗 (灰) */
+        .p-gray { background: #9e9e9e; opacity: 0.5; } /* 預計點 */
+        .p-blue { background: #1565C0; opacity: 1; } /* 正式在崗 */
+        .p-orange { background: #ff6d00; animation: p-pulse 1.2s infinite; } /* 跳崗中 */
 
-        @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
+        @keyframes p-pulse { 
+            0% { transform: scale(1); box-shadow: 0 0 0 0px rgba(255, 109, 0, 0.7); }
+            70% { transform: scale(1.1); box-shadow: 0 0 0 10px rgba(255, 109, 0, 0); }
+            100% { transform: scale(1); box-shadow: 0 0 0 0px rgba(255, 109, 0, 0); }
+        }
 
-        /* 原有長官回報樣式 */
-        .report-section { margin-top: 10px; border-top: 1px solid #ddd; padding-top: 10px; }
+        /* 原有樣式 */
+        .status-info { font-size: 11px; text-align: center; color: #666; margin: 4px 0; }
+        .dist-info { font-size: 13px; color: #d32f2f; text-align: center; font-weight: bold; margin-bottom: 8px; }
+        .report-section { border-top: 2px solid #eee; margin-top: 10px; padding-top: 8px; }
+        .report-title { font-size: 13px; font-weight: bold; display: block; margin-bottom: 5px; color: #444; }
         .btn-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 5px; }
-        .btn-report { font-size: 11px; padding: 5px; background: #fff; border: 1px solid #ccc; }
-        .time-label { font-size: 12px; color: #d32f2f; text-align: center; display: block; }
+        .btn-report { font-size: 11px; padding: 5px; background: #fff; border: 1px solid #ddd; border-left: 4px solid #ccc; }
+        .btn-arrived { border-left-color: #4CAF50; }
+        .btn-left { border-left-color: #f44336; }
+        .time-label { font-size: 14px; color: #d32f2f; font-weight: bold; display: block; margin-top: 2px; }
+        
+        .marker-icon { display: flex; justify-content: center; align-items: center; width: 36px; height: 36px; background: white; border: 2px solid #d32f2f; border-radius: 50%; font-size: 20px; box-shadow: 0 0 10px rgba(0,0,0,0.3); }
+        .god-marker { animation: god-pulse 2s infinite; }
+        @keyframes god-pulse { 0% { box-shadow: 0 0 0 0px rgba(211, 47, 47, 0.7); } 70% { box-shadow: 0 0 0 15px rgba(211, 47, 47, 0); } 100% { box-shadow: 0 0 0 0px rgba(211, 47, 47, 0); } }
     </style>
 </head>
 <body>
 
 <div id="mainPanel" class="control-panel">
     <div class="panel-header" onclick="togglePanel()">
-        <span style="font-size: 14px; font-weight: bold;">👮‍♂️ 指揮官勤務系統</span>
-        <button style="width:auto; margin:0;" id="toggleBtn">收合</button>
+        <span style="font-size: 14px; font-weight: bold;">🚨 迎城隍指揮勤務系統</span>
+        <button style="width:auto; margin:0; font-size:12px; background:none; border:1px solid white;" id="toggleBtn">收合</button>
     </div>
     <div id="liveClock" class="live-clock">----/--/-- --:--:--</div>
     
     <div class="panel-content">
-        <div class="police-stats">
-            <div class="stat-row">總警力：<span>115 名</span></div>
-            <div class="stat-row">狀態：<span id="dutyStatus" class="highlight">尚未開始</span></div>
-            <div class="stat-row">在崗/跳崗：<span id="jumpStatus">0 / 0 名</span></div>
+        <div class="duty-dashboard">
+            <div class="duty-stat">勤務模式：<span id="dutyModeText">預判部署(灰色)</span></div>
+            <div class="duty-stat">總警力：115 名 | 在崗：<b id="statOnDuty">0</b></div>
+            <div class="duty-stat">跳崗狀態：<b id="statJump">無</b></div>
         </div>
 
-        <button class="btn-jump" onclick="triggerJump()">🔄 執行 50 名警力跳崗</button>
-        <button class="btn-toggle-layer" onclick="togglePoliceLayer()">👁️ 顯示/隱藏警力點位</button>
+        <button class="btn-main-duty" onclick="startOfficialDuty()">🎬 全員正式上崗 (切換深藍)</button>
+        <button class="btn-jump" onclick="triggerJump(1)">🔄 執行第一階段跳崗 (1-55號)</button>
+        <button class="btn-hide" onclick="togglePoliceLayer()">👁️ 顯示/隱藏 警力點位圖層</button>
+        
+        <div id="statusText" class="status-info">載入中...</div>
+        <div id="distanceText" class="dist-info">隊伍長度: -- 公尺</div>
+
+        <button id="adminBtn" style="background:#FF9800; color:white;" onclick="toggleAdminMode()">📡 神轎頭定位發送</button>
+        <button id="tailBtn" style="background:#4CAF50; color:white;" onclick="toggleTailMode()">🚩 隊伍尾定位回報</button>
 
         <div class="report-section">
+            <span class="report-title">📌 長官蒞臨/離轄時間回報</span>
             <div class="btn-grid" id="arrivalGrid"></div>
         </div>
+
+        <button style="background:#607D8B; color:white; margin-top:10px; font-size:12px;" onclick="clearRoutePath()">🧹 清除今日軌跡</button>
     </div>
 </div>
 
 <div id="map"></div>
 
 <script>
-    // 1. 初始化地圖與基礎路徑 (延用您的路徑資料)
-    const rawCoords = [[118.3159,24.4324],[118.3153,24.4327],[118.3144,24.4330],[118.3178,24.4333],[118.3161,24.4347],[118.3193,24.4370],[118.3205,24.4312]]; // 簡略示範路徑
+    // 1. 基礎資料初始化 (繞境路線座標)
+    const rawCoords = [[118.31598,24.43249],[118.31536,24.43270],[118.31443,24.43303],[118.31482,24.43316],[118.31594,24.43395],[118.31691,24.43276],[118.31788,24.43334],[118.31618,24.43473],[118.31836,24.43709],[118.31904,24.43572],[118.31971,24.43434],[118.31913,24.43379],[118.31898,24.43261],[118.31945,24.43214],[118.32053,24.43128],[118.32011,24.43086],[118.31905,24.43086],[118.31845,24.43160],[118.31701,24.43271],[118.31622,24.43220],[118.31710,24.43146],[118.31754,24.43068],[118.31617,24.43022],[118.31462,24.43050],[118.31461,24.43122],[118.31499,24.43185],[118.31598,24.43242]];
     const routePoints = rawCoords.map(p => [p[1], p[0]]);
+
     const map = L.map('map', { zoomControl: false }).setView([24.4335, 118.3165], 16);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-    L.polyline(routePoints, { color: "#d32f2f", weight: 5, opacity: 0.3 }).addTo(map);
 
-    // 2. 警力點位資料生成 (115名)
+    const fullPath = L.polyline(routePoints, { color: "#d32f2f", weight: 6, opacity: 0.2 }).addTo(map);
+    const passedPath = L.polyline([], { color: "#555", weight: 4, dashArray: "5, 8" }).addTo(map);
+
+    const godIcon = L.divIcon({ html: '<div class="marker-icon god-marker">👨‍⚖️</div>', className: '', iconSize: [36, 36] });
+    const tailIcon = L.divIcon({ html: '<div class="marker-icon" style="border-color:#4CAF50">🚩</div>', className: '', iconSize: [30, 30] });
+    const palanquinMarker = L.marker(routePoints[0], { icon: godIcon }).addTo(map);
+    const tailMarker = L.marker([0,0], { icon: tailIcon, opacity: 0 }).addTo(map);
+
+    // 2. 警力勤務系統
     const policeLayer = L.layerGroup().addTo(map);
+    let policeStatus = "gray"; // gray, blue
+    let jumpStep = 0; // 0:無, 1:第一階段
     let policeData = [];
-    let isJumped = false;
 
     function initPolice() {
         for (let i = 1; i <= 115; i++) {
-            // 隨機分佈在路徑附近的點位
+            // 隨機模擬115個崗位座標
             let base = routePoints[i % routePoints.length];
             policeData.push({
                 id: i,
                 pos1: [base[0] + (Math.random()-0.5)*0.002, base[1] + (Math.random()-0.5)*0.002],
-                pos2: [base[0] + (Math.random()-0.5)*0.004, base[1] + (Math.random()-0.5)*0.004], // 跳崗後位置
-                isJumpTarget: i <= 55, // 前 55 名需要跳崗
-                marker: null
+                pos2: [base[0] + (Math.random()-0.5)*0.004, base[1] + (Math.random()-0.5)*0.004], // 跳崗位置
+                isJumpGroup: i <= 55
             });
         }
+        renderPolice();
     }
 
-    function updatePoliceDisplay() {
-        const now = new Date();
-        const startDuty = new Date();
-        startDuty.setHours(12, 30, 0);
-        
-        const isOnDuty = now >= startDuty;
-        document.getElementById('dutyStatus').innerText = isOnDuty ? "勤務執行中" : "尚未開始(12:30)";
-        document.getElementById('dutyStatus').style.color = isOnDuty ? "#2E7D32" : "#d32f2f";
-
-        let jumpCount = 0;
+    function renderPolice() {
         policeLayer.clearLayers();
-
+        let onDutyCount = 0;
+        
         policeData.forEach(p => {
-            let currentCoords = (isJumped && p.isJumpTarget) ? p.pos2 : p.pos1;
-            let statusClass = "p-on";
-            
-            if (!isOnDuty) statusClass = "p-off";
-            else if (isJumped && p.isJumpTarget) {
-                statusClass = "p-jump";
-                jumpCount++;
+            let coords = (jumpStep === 1 && p.isJumpGroup) ? p.pos2 : p.pos1;
+            let theme = "p-gray";
+            if (policeStatus === "blue") {
+                theme = (jumpStep === 1 && p.isJumpGroup) ? "p-orange" : "p-blue";
+                onDutyCount++;
             }
 
             const icon = L.divIcon({
                 className: '',
-                html: `<div class="p-marker ${statusClass}">${p.id}</div>`,
+                html: `<div class="p-marker ${theme}">${p.id}</div>`,
                 iconSize: [20, 20]
             });
-
-            L.marker(currentCoords, { icon: icon }).addTo(policeLayer);
+            L.marker(coords, { icon: icon }).addTo(policeLayer);
         });
 
-        document.getElementById('jumpStatus').innerText = `${isOnDuty ? 115 : 0} / ${isJumped ? jumpCount : 0} 名`;
+        document.getElementById('statOnDuty').innerText = onDutyCount;
+        document.getElementById('statJump').innerText = jumpStep === 1 ? "1-55號跳崗中" : "無";
     }
 
-    // 3. 功能函式
-    function triggerJump() {
-        if (!confirm("確定要將 50-60 名警力切換至第二崗位（跳崗）？")) return;
-        isJumped = !isJumped;
-        updatePoliceDisplay();
+    function startOfficialDuty() {
+        policeStatus = "blue";
+        document.getElementById('dutyModeText').innerText = "勤務執行中(深藍)";
+        renderPolice();
+    }
+
+    function triggerJump(step) {
+        if (policeStatus !== "blue") { alert("請先啟動全員上崗模式"); return; }
+        jumpStep = (jumpStep === step) ? 0 : step; // 切換開關
+        renderPolice();
     }
 
     function togglePoliceLayer() {
@@ -162,24 +190,69 @@
         else map.addLayer(policeLayer);
     }
 
-    function togglePanel() {
-        const panel = document.getElementById('mainPanel');
-        panel.classList.toggle('minimized');
-        document.getElementById('toggleBtn').innerText = panel.classList.contains('minimized') ? "展開" : "收合";
+    // 3. Firebase 整合
+    const firebaseConfig = {
+        apiKey: "AIzaSyAWtgeRkdjtaHdtnoKdgOMQ_PTBMpwmsLI", 
+        databaseURL: "https://kinmen-location-default-rtdb.firebaseio.com",
+        projectId: "kinmen-location"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    // 神轎與隊尾同步邏輯... (延用您原本的高效代碼)
+    db.ref('palanquin/location').on('value', (s) => {
+        const d = s.val();
+        if(d) {
+            const currentPos = L.latLng(d.lat, d.lng);
+            let minDist = Infinity, closestIdx = 0;
+            routePoints.forEach((p, i) => {
+                let dist = L.latLng(p).distanceTo(currentPos);
+                if(dist < minDist) { minDist = dist; closestIdx = i; }
+            });
+            passedPath.setLatLngs(routePoints.slice(0, closestIdx + 1));
+            palanquinMarker.setLatLng(routePoints[closestIdx]);
+            document.getElementById('statusText').innerText = "最後更新: " + new Date(d.timestamp).toLocaleTimeString();
+        }
+    });
+
+    // 4. 長官回報系統
+    const officials = ['縣長', '李副縣長', '陳副縣長', '議長', '副議長'];
+    function initOfficials() {
+        const grid = document.getElementById('arrivalGrid');
+        officials.forEach(p => {
+            grid.innerHTML += `
+                <div style="border:1px solid #eee; padding:5px; border-radius:4px;">
+                    <button class="btn-report btn-arrived" onclick="reportStatus('${p}','蒞')">${p.replace('副縣長','副縣')}(蒞)</button>
+                    <button class="btn-report btn-left" onclick="reportStatus('${p}','離')">離</button>
+                    <span id="time-${p}" class="time-label">--:-- | --:--</span>
+                </div>`;
+        });
     }
 
-    // 4. 定時器與初始化
-    setInterval(() => {
-        const now = new Date();
-        document.getElementById('liveClock').innerText = now.toLocaleString();
-        if (now.getSeconds() === 0) updatePoliceDisplay(); // 每分鐘檢查一次勤務時間
-    }, 1000);
+    function reportStatus(person, type) {
+        if(!confirm(`更新 ${person} 時間？`)) return;
+        db.ref(`officials/${person}/${type}`).set({ timestamp: Date.now() });
+    }
 
+    db.ref('officials').on('value', (s) => {
+        const data = s.val() || {};
+        officials.forEach(p => {
+            const t蒞 = data[p]?.蒞 ? new Date(data[p].蒞.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : "--:--";
+            const t離 = data[p]?.離 ? new Date(data[p].離.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : "--:--";
+            document.getElementById(`time-${p}`).innerText = `${t蒞} | ${t離}`;
+        });
+    });
+
+    // 工具函式
+    function togglePanel() { document.getElementById('mainPanel').classList.toggle('minimized'); }
+    function updateClock() { document.getElementById('liveClock').innerText = new Date().toLocaleString(); }
+    setInterval(updateClock, 1000);
+
+    // 初始化
     initPolice();
-    updatePoliceDisplay();
+    initOfficials();
+    updateClock();
 
-    // 5. 原有長官回報邏輯整合 (Firebase)
-    // 此處保留您原本的 Firebase 初始化與 officials 監聽代碼...
 </script>
 </body>
 </html>
